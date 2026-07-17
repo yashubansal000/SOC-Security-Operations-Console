@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Enterprise Network Anomaly Detection and Root-Cause Analysis Command Center. Powered by XGBoost, SHAP explainable ML, and grounded AI reasoning.">
+  <title>SOC Command Center — Network Root-Cause Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+  <!-- ================= LANDING PAGE VIEW ================= -->
+  <div id="landing"></div>
+
+  <!-- ================= MAIN APP COMMAND SHELL ================= -->
+  <div class="app" id="app" style="display:none">
+    
+    <!-- TOP STATUS ACTION BAR -->
+    <header class="topbar">
+      <button class="hamb" id="hamb" aria-label="Toggle Navigation Panel">☰</button>
+      <div class="brand">🛡️ SOC COMMAND PANEL <small>&bull; Anomaly Root-Cause Assistant</small></div>
+      <div class="health">
+        <span><span class="dot ok" id="h-api"></span>API Service</span>
+        <span><span class="dot ok" id="h-db"></span>SQLite Core</span>
+        <span id="h-updated" style="font-family:var(--mono)">Syncing...</span>
+        <button class="btn ghost" id="refreshBtn">↻ Refresh</button>
+        <a class="btn ghost" href="http://127.0.0.1:8421" id="customDataBtn">🔎 Check Your Own Data</a>
+      </div>
+    </header>
+
+    <!-- SIDEBAR NAVIGATION PANEL -->
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <!-- VIEWS CONTAINER WORKSPACE -->
+    <main class="main">
+      
+      <!-- VIEW: ANALYTICS OVERVIEW -->
+      <section class="view active" id="v-overview">
+        <h2 class="vt">Threat Posture Analytics</h2>
+        <div class="vsub">Real-time security analytics metrics. All graphs consume verified database records.</div>
+        <div class="grid metrics" id="metrics"></div>
+        <div class="grid charts" id="chartGrid" style="margin-top:20px"></div>
+      </section>
+
+      <!-- VIEW: INCIDENT DESK -->
+      <section class="view" id="v-incidents">
+        <h2 class="vt">Active Incidents Desk</h2>
+        <div class="vsub">List of correlated anomaly clusters. Click an incident row to investigate.</div>
+        <div class="card">
+          <div class="toolbar">
+            <input id="search" placeholder="Search target host, category, or severity..." aria-label="Search incident table">
+            <select id="fSeverity" aria-label="Filter by Severity">
+              <option value="">All Severities</option>
+            </select>
+            <select id="fAttack" aria-label="Filter by Attack Category">
+              <option value="">All Attack Types</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto; max-height:68vh;">
+            <table id="incTable">
+              <thead>
+                <tr>
+                  <th data-k="incident_id">ID</th>
+                  <th data-k="attack_cat">Threat Category</th>
+                  <th data-k="severity">Severity</th>
+                  <th data-k="node_id">Target Host</th>
+                  <th data-k="flow_count">Scored Flows</th>
+                  <th data-k="_rc">Root Cause Node</th>
+                  <th data-k="_conf">Conf.</th>
+                  <th data-k="_status">Decision</th>
+                  <th data-k="start_ts">Detected Time</th>
+                </tr>
+              </thead>
+              <tbody id="incBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: INCIDENT DETAILS -->
+      <section class="view" id="v-evidence">
+        <h2 class="vt">Incident Details &amp; Evidence</h2>
+        <div class="vsub" id="evSub">Select an active incident to drill down.</div>
+        <div class="grid two" style="margin-bottom:20px;">
+          <div class="card" id="incSummary" style="margin-bottom:0"></div>
+          <div class="card" id="incShapCard" style="margin-bottom:0">
+            <h3>Explainable AI (SHAP) Profile <span class="hint">Live D3 model feature contributions</span></h3>
+            <div id="incShapResult" class="empty">Select an incident to query explainability.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Evidence Matrix <span class="hint">Confirmed vs correlated vs coverage gaps</span></h3>
+          <div class="grid ev-matrix" id="evMatrix"></div>
+        </div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Top Derived Root Cause</h3>
+            <div id="rootCard" class="empty">Execute reasoning engine.</div>
+          </div>
+          <div class="card">
+            <h3>Related Alerts <span class="hint">Shared vector or host target</span></h3>
+            <div id="related" class="empty">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: HYPOTHESES ENGINE -->
+      <section class="view" id="v-hypotheses">
+        <h2 class="vt">Agentic Reasoner Console</h2>
+        <div class="vsub">LangGraph reasoning trace. Runs offline checking templates or calls LLM.</div>
+        <div class="card" style="display:flex; align-items:center; gap:16px;">
+          <button class="btn" id="runBtn">▶ Run reasoning engine</button>
+          <span id="engineMeta" style="color:var(--muted); font-family:var(--mono);"></span>
+        </div>
+        <div id="hypList"></div>
+        <div class="card hidden" id="traceCard">
+          <h3>Grounding Trace Log</h3>
+          <ul class="tl" id="traceList" style="font-family:var(--mono); font-size:12px; max-height:300px; overflow-y:auto; padding:10px;"></ul>
+        </div>
+      </section>
+
+      <!-- VIEW: AI EXPLAINABILITY (SHAP) -->
+      <section class="view" id="v-shap">
+        <h2 class="vt">Explainable AI Telemetry Simulator</h2>
+        <div class="vsub">Interactive local flow evaluation via tree-explainers. Calls native Python XGBoost and SHAP engines.</div>
+        <div id="shapContainer"></div>
+      </section>
+
+      <!-- VIEW: KNOWLEDGE GRAPH -->
+      <section class="view" id="v-graph">
+        <h2 class="vt">Relational Investigation Graph</h2>
+        <div class="vsub">Incident mapping from evidence to suggested actions. Click nodes for property reviews.</div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Knowledge Graph</h3>
+            <div id="graphWrap">
+              <div class="empty">Select an incident to render graph.</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Node Property Inspector</h3>
+            <div class="node-detail" id="graphDetail" style="font-family:var(--mono);">
+              Select a node in the D3 graph to inspect properties.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: NETWORK TOPOLOGY -->
+      <section class="view" id="v-topology">
+        <h2 class="vt">Infrastructure Topology Map</h2>
+        <div class="vsub">Interactive map showing firewall, load balancers, and target hosts. Hover to inspect.</div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Network Map</h3>
+            <div id="topoWrap">
+              <div class="empty">Select an incident to map blast radius paths.</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Network Node Properties</h3>
+            <div class="node-detail" id="topoDetail" style="font-family:var(--mono);">
+              Select a node on the map to inspect configuration.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: INCIDENT TIMELINE -->
+      <section class="view" id="v-timeline">
+        <h2 class="vt">Security Incident Timeline</h2>
+        <div class="vsub">Chronological pipeline stage logs from ingestion to mitigations. Click log to expand.</div>
+        <div class="card">
+          <h3>Ingestion Pipeline Pipeline Steps</h3>
+          <div class="pipeline" id="pipeline"></div>
+        </div>
+        <div class="card">
+          <h3>Telemetry Events Timeline</h3>
+          <ul class="tl" id="eventTl">
+            <div class="empty">Select an incident to load events.</div>
+          </ul>
+        </div>
+      </section>
+
+      <!-- VIEW: SECURITY SIEM AUDIT CONSOLE -->
+      <section class="view" id="v-audit">
+        <h2 class="vt">Security SIEM Audit Console</h2>
+        <div class="vsub"> Chronological audit trace logs of all mutations. Autorefreshes every second.</div>
+        <div class="card">
+          <div class="toolbar" style="align-items:center;">
+            <input id="logSearch" placeholder="Search audit messages, details, or incidents..." style="flex:1;">
+            <select id="logActor">
+              <option value="">All Actors</option>
+              <option value="system">System Daemon</option>
+              <option value="reviewer">Analyst Reviewer</option>
+            </select>
+            <button class="btn" data-decide="approve" disabled>✓ Approve incident</button>
+            <button class="btn danger" data-decide="reject" disabled>✗ Reject incident</button>
+            <button class="btn ghost" id="downloadLogsBtn" aria-label="Download visible audit logs as CSV">⬇ Download Logs</button>
+          </div>
+          <div class="siem" id="auditBody">
+            <div class="empty">Awaiting telemetry logs...</div>
+          </div>
+        </div>
+      </section>
+      
+    </main>
+  </div>
+
+  <!-- External D3 and Anime libraries loaded via vendor folder -->
+  <script src="/static/vendor/d3.min.js"></script>
+  <script src="/static/vendor/anime.min.js"></script>
+  <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

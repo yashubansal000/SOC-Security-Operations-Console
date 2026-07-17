@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RCA Console — Module 4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #111417;
+    --panel-2: #14181c;
+    --line: #23282e;
+    --text: #d8dee3;
+    --text-dim: #7c8894;
+    --amber: #e8a33d;
+    --green: #3ecf8e;
+    --red: #e35d5d;
+    --blue: #4f8ff0;
+    --mono: 'SF Mono', 'Fira Code', ui-monospace, 'Cascadia Code', monospace;
+    --sans: -apple-system, 'Inter', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #101317, #0d0f12);
+  }
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header .brand .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: .4; }
+  }
+  header .brand h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: #fff;
+  }
+  header .brand small {
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  header select, header button {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  header button {
+    background: var(--amber);
+    color: #1a1300;
+    font-weight: 600;
+    border: none;
+    margin-left: 8px;
+  }
+  header button:hover { filter: brightness(1.08); }
+  header button:disabled { opacity: .5; cursor: default; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    grid-template-rows: 340px 1fr;
+    gap: 1px;
+    background: var(--line);
+    height: calc(100vh - 53px);
+  }
+  .panel {
+    background: var(--panel);
+    padding: 16px 18px;
+    overflow-y: auto;
+  }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin: 0 0 12px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #topology-panel { grid-column: 1; grid-row: 1; }
+  #evidence-panel { grid-column: 2; grid-row: 1; }
+  #hypotheses-panel { grid-column: 1; grid-row: 2; }
+  #trace-panel { grid-column: 2; grid-row: 2; }
+
+  /* Topology graph */
+  .node circle {
+    stroke-width: 2px;
+    fill: var(--panel-2);
+  }
+  .node text {
+    fill: var(--text);
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+  .link {
+    stroke: var(--line);
+    stroke-width: 1.4px;
+  }
+  .link.causal {
+    stroke: var(--amber);
+    stroke-width: 2.6px;
+  }
+  .node.primary circle { stroke: var(--amber); fill: #2a2013; }
+  .node.rootcause circle { stroke: var(--red); fill: #2a1616; }
+  .node.normal circle { stroke: var(--line); }
+
+  /* Evidence items */
+  .ev-item {
+    border-left: 3px solid var(--line);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    background: var(--panel-2);
+    border-radius: 0 6px 6px 0;
+    font-size: 12.5px;
+  }
+  .ev-item.confirmed { border-left-color: var(--green); }
+  .ev-item.correlated { border-left-color: var(--amber); }
+  .ev-item.missing { border-left-color: var(--text-dim); opacity: .75; }
+  .ev-tag {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+  }
+  .ev-tag.confirmed { background: rgba(62,207,142,.15); color: var(--green); }
+  .ev-tag.correlated { background: rgba(232,163,61,.15); color: var(--amber); }
+  .ev-tag.missing { background: rgba(124,136,148,.15); color: var(--text-dim); }
+  .ev-meta { color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; margin-top: 3px; }
+
+  /* Hypothesis cards */
+  .hyp-card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .hyp-card.rejected { opacity: .55; }
+  .hyp-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .hyp-claim { font-size: 13px; line-height: 1.4; flex: 1; }
+  .hyp-conf { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--green); white-space: nowrap; }
+  .hyp-card.rejected .hyp-conf { color: var(--red); font-size: 13px; }
+  .hyp-bar-track { height: 4px; background: var(--line); border-radius: 2px; margin: 8px 0; overflow: hidden; }
+  .hyp-bar-fill { height: 100%; background: var(--green); }
+  .hyp-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--text-dim); }
+  .hyp-reject-reason { font-family: var(--mono); font-size: 11px; color: var(--red); margin-top: 6px; }
+
+  /* Trace log */
+  #trace-log { font-family: var(--mono); font-size: 11.5px; line-height: 1.9; }
+  .trace-line { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .trace-line.pass { color: var(--green); }
+  .trace-line.reject { color: var(--red); }
+  .trace-line.info { color: var(--text-dim); }
+
+  .empty { color: var(--text-dim); font-style: italic; font-size: 12px; }
+  .rank-pill {
+    display:inline-flex; align-items:center; justify-content:center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--amber); color:#1a1300; font-family: var(--mono);
+    font-size: 11px; font-weight: 700; margin-right: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>RCA CONSOLE</h1>
+      <small>Module 4 · Root-Cause Agent Layer · LangGraph</small>
+    </div>
+  </div>
+  <div>
+    <select id="incident-select"></select>
+    <button id="run-btn">Run Analysis ▶</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="panel" id="topology-panel">
+    <h2>Topology & Impact Path <span id="topo-hint" class="empty"></span></h2>
+    <svg id="topo-svg" width="100%" height="270"></svg>
+  </div>
+
+  <div class="panel" id="evidence-panel">
+    <h2>Evidence Bundle</h2>
+    <div id="evidence-list"><div class="empty">Run analysis to load evidence…</div></div>
+  </div>
+
+  <div class="panel" id="hypotheses-panel">
+    <h2>Ranked Root-Cause Hypotheses</h2>
+    <div id="hyp-list"><div class="empty">Run analysis to generate hypotheses…</div></div>
+    <h2 style="margin-top:18px;">Recommended Next Steps</h2>
+    <div id="remediation-list"><div class="empty">—</div></div>
+  </div>
+
+  <div class="panel" id="trace-panel">
+    <h2>Agent Trace (generate → ground_check → rank → recommend)</h2>
+    <div id="trace-log"><div class="empty">No run yet.</div></div>
+  </div>
+</div>
+
+<script>
+const API = "";
+
+let topologyData = null;
+let currentResult = null;
+
+async function loadIncidents() {
+  const res = await fetch(`${API}/api/incidents`);
+  const incidents = await res.json();
+  const sel = document.getElementById('incident-select');
+  sel.innerHTML = incidents.map(i => `<option value="${i.incident_id}">${i.incident_id} — ${i.attack_cat} on ${i.primary_node}</option>`).join('');
+}
+
+async function loadTopology() {
+  const res = await fetch(`${API}/api/topology`);
+  topologyData = await res.json();
+  drawTopology(null, []);
+}
+
+function drawTopology(primaryNode, causalNodeIds) {
+  const svg = d3.select('#topo-svg');
+  svg.selectAll('*').remove();
+  const width = document.getElementById('topo-svg').clientWidth || 500;
+  const height = 270;
+
+  const nodes = topologyData.nodes.map(d => ({...d}));
+  const links = topologyData.edges.map(d => ({...d}));
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(95))
+    .force('charge', d3.forceManyBody().strength(-320))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('collide', d3.forceCollide(38));
+
+  const link = svg.append('g').selectAll('line')
+    .data(links).join('line')
+    .attr('class', d => {
+      const causal = causalNodeIds.includes(d.source.id || d.source) && causalNodeIds.includes(d.target.id || d.target);
+      return 'link' + (causal ? ' causal' : '');
+    });
+
+  const node = svg.append('g').selectAll('g')
+    .data(nodes).join('g')
+    .attr('class', d => {
+      if (d.id === primaryNode) return 'node primary';
+      if (causalNodeIds.includes(d.id) && d.id !== primaryNode) return 'node rootcause';
+      return 'node normal';
+    })
+    .call(d3.drag()
+      .on('start', (event,d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (event,d) => { d.fx=event.x; d.fy=event.y; })
+      .on('end', (event,d) => { if (!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  node.append('circle').attr('r', d => d.id === primaryNode ? 15 : 11);
+  node.append('text').text(d => d.label).attr('x', 16).attr('y', 4);
+
+  sim.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+function renderEvidence(evidence) {
+  const el = document.getElementById('evidence-list');
+  el.innerHTML = evidence.map(e => `
+    <div class="ev-item ${e.tier}">
+      <span class="ev-tag ${e.tier}">${e.tier}</span>${e.description}
+      <div class="ev-meta">${e.evidence_id} · ${e.node} · ${e.timestamp || 'no timestamp'}</div>
+    </div>
+  `).join('');
+}
+
+function renderHypotheses(hyps) {
+  const el = document.getElementById('hyp-list');
+  el.innerHTML = hyps.map((h, i) => {
+    if (!h.grounded) {
+      return `
+      <div class="hyp-card rejected">
+        <div class="hyp-top">
+          <div class="hyp-claim">${h.claim}</div>
+          <div class="hyp-conf">REJECTED</div>
+        </div>
+        <div class="hyp-reject-reason">✕ ${h.rejected_reason}</div>
+      </div>`;
+    }
+    const pct = Math.round((h.confidence || 0) * 100);
+    const tb = h.evidence_tier_breakdown || {};
+    return `
+      <div class="hyp-card">
+        <div class="hyp-top">
+          <div class="hyp-claim"><span class="rank-pill">${i+1}</span>${h.claim}</div>
+          <div class="hyp-conf">${pct}%</div>
+        </div>
+        <div class="hyp-bar-track"><div class="hyp-bar-fill" style="width:${pct}%"></div></div>
+        <div class="hyp-badges">
+          <span class="badge">root: ${h.root_cause_node}</span>
+          <span class="badge">${tb.confirmed||0} confirmed</span>
+          <span class="badge">${tb.correlated||0} correlated</span>
+          <span class="badge">${tb.missing||0} missing</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderRemediation(steps) {
+  const el = document.getElementById('remediation-list');
+  if (!steps.length) { el.innerHTML = '<div class="empty">No grounded hypothesis to base remediation on.</div>'; return; }
+  el.innerHTML = steps.map(s => `
+    <div class="ev-item correlated">
+      <strong>${s.step}</strong>
+      <div class="ev-meta">${s.rationale}</div>
+    </div>
+  `).join('');
+}
+
+function renderTrace(log) {
+  const el = document.getElementById('trace-log');
+  el.innerHTML = log.map(line => {
+    let cls = 'info';
+    if (line.includes('PASSED')) cls = 'pass';
+    if (line.includes('REJECTED')) cls = 'reject';
+    return `<div class="trace-line ${cls}">▸ ${line}</div>`;
+  }).join('');
+}
+
+async function runAnalysis() {
+  const incidentId = document.getElementById('incident-select').value;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+
+  const res = await fetch(`${API}/api/incidents/${incidentId}/run`);
+  const result = await res.json();
+  currentResult = result;
+
+  renderEvidence(result.evidence_bundle);
+  renderHypotheses(result.ranked_hypotheses);
+  renderRemediation(result.remediation);
+  renderTrace(result.trace_log);
+
+  const groundedNodes = result.ranked_hypotheses.filter(h => h.grounded).map(h => h.root_cause_node);
+  drawTopology(result.primary_node, [result.primary_node, ...groundedNodes]);
+  document.getElementById('topo-hint').textContent = `primary: ${result.primary_node}`;
+
+  btn.disabled = false;
+  btn.textContent = 'Run Analysis ▶';
+}
+
+document.getElementById('run-btn').addEventListener('click', runAnalysis);
+
+(async function init() {
+  await loadIncidents();
+  await loadTopology();
+})();
+</script>
+</body>
+</html>

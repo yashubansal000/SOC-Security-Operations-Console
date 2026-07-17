@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Network Root Cause Analysis</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; align-items: center; padding: 50px; }
+        .container { background: #161b22; padding: 30px; border-radius: 12px; border: 1px solid #30363d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-width: 600px; width: 100%; }
+        h1 { font-size: 1.5rem; margin-top: 0; color: #58a6ff; }
+        p { color: #8b949e; margin-bottom: 25px; }
+        
+        .file-drop { border: 2px dashed #30363d; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; margin-bottom: 15px; transition: all 0.3s ease; display: block; background: #0d1117; }
+        .file-drop:hover { border-color: #58a6ff; background-color: #1c2128; }
+        .file-drop span { color: #c9d1d9; font-weight: 500; }
+        input[type="file"] { display: none; }
+        
+        /* New File List Styles */
+        #fileList { list-style: none; padding: 0; margin: 0 0 20px 0; max-height: 150px; overflow-y: auto; }
+        #fileList li { background: #21262d; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; border: 1px solid #30363d; }
+        .file-size { color: #8b949e; font-size: 0.8rem; }
+
+        button { background-color: #238636; color: white; border: none; padding: 14px 24px; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.3s; }
+        button:hover { background-color: #2ea043; }
+        button:disabled { background-color: #21262d; color: #8b949e; cursor: not-allowed; border: 1px solid #30363d; }
+        
+        .status-box { margin-top: 20px; padding: 15px; border-radius: 6px; display: none; font-family: monospace; white-space: pre-wrap; word-wrap: break-word; font-size: 0.9rem; }
+        .success { background-color: #051d11; border: 1px solid #1a7f37; color: #3fb950; }
+        .error { background-color: #2a0404; border: 1px solid #a40e26; color: #ff7b72; }
+        .loading { background-color: #0c1833; border: 1px solid #1f6feb; color: #79c0ff; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Incident Data Ingestion</h1>
+        <p>Upload architecture diagrams (PDF/TXT) and raw network logs.</p>
+
+        <!-- Clickable File Drop Area -->
+        <label class="file-drop" for="fileInput" id="dropZone">
+            <span id="fileLabel">📁 Click to select files (Multiple allowed)</span>
+        </label>
+        <input type="file" id="fileInput" multiple>
+
+        <!-- Dynamically populated list of selected files -->
+        <ul id="fileList"></ul>
+
+        <button id="uploadBtn" onclick="uploadFiles()">Extract & Analyze</button>
+
+        <!-- Results Display -->
+        <div id="outputBox" class="status-box"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileLabel = document.getElementById('fileLabel');
+        const fileList = document.getElementById('fileList');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const outputBox = document.getElementById('outputBox');
+
+        // Format bytes to KB/MB
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Update UI when files are selected
+        fileInput.addEventListener('change', () => {
+            fileList.innerHTML = ''; // Clear previous list
+            
+            if (fileInput.files.length > 0) {
+                fileLabel.textContent = `📁 ${fileInput.files.length} file(s) ready for upload`;
+                
+                // Add each file to the UI list
+                Array.from(fileInput.files).forEach(file => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span>📄 ${file.name}</span> <span class="file-size">${formatBytes(file.size)}</span>`;
+                    fileList.appendChild(li);
+                });
+            } else {
+                fileLabel.textContent = `📁 Click to select files (Multiple allowed)`;
+            }
+        });
+
+        async function uploadFiles() {
+            if (fileInput.files.length === 0) {
+                alert("Please select at least one file to upload.");
+                return;
+            }
+
+            // Prepare UI for loading
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = "AI is Extracting Data (Please wait)...";
+            outputBox.style.display = "block";
+            outputBox.className = "status-box loading";
+            outputBox.textContent = "Processing... sending files to backend and Groq LLM.";
+
+            // Bundle files into FormData
+            const formData = new FormData();
+            for (const file of fileInput.files) {
+                formData.append('files', file);
+            }
+
+            try {
+                // Send to FastAPI
+                const response = await fetch('http://localhost:8421/api/upload-incident-data', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                // Handle validation gatekeeper errors (422)
+                if (!response.ok) {
+                    outputBox.className = "status-box error";
+                    outputBox.textContent = `❌ Gatekeeper Halted Pipeline:\n\n${data.detail}`;
+                } else {
+                    // Success!
+                    outputBox.className = "status-box success";
+                    outputBox.textContent = `✅ Success! Database Populated.\n\nNodes Extracted: ${data.nodes_extracted}\nFlows Extracted: ${data.flows_extracted}\n\nReady for Module 2!`;
+                }
+            } catch (error) {
+                outputBox.className = "status-box error";
+                outputBox.textContent = `❌ Connection Error: Is the FastAPI server running on port 8000?`;
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = "Extract & Analyze";
+            }
+        }
+    </script>
+</body>
+</html>

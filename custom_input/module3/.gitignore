@@ -1,0 +1,5 @@
+venv/
+data/processed/*.db
+data/processed/*.json
+__pycache__/
+.env

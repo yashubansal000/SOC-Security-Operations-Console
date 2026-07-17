@@ -1,0 +1,18 @@
+# Module 3 (Evidence Engine)
+networkx
+
+# Module 1 & 2 (Data Gen & ML)
+pandas
+xgboost
+lightgbm
+shap
+
+# Module 4 (Agent Layer)
+langgraph
+langchain
+langchain-anthropic
+pydantic
+
+# Module 7 (API)
+fastapi
+uvicorn

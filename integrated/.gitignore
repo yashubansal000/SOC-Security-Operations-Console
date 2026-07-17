@@ -1,0 +1,26 @@
+# Virtual Environment
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment Variables
+.env
+
+# Logs
+logs/
+*.log
+
+# macOS
+.DS_Store
+
+# Generated database files
+data/processed/*.db
+data/processed/*.db-journal
+data/processed/*.sqlite
+data/processed/*.sqlite3
+
+# Generated JSON outputs (if they are created by the pipeline)
+data/processed/*.json
